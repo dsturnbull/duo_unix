@@ -24,6 +24,7 @@
 #include <string.h>
 #include <syslog.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #include "duo.h"
 #include "groupaccess.h"
@@ -56,6 +57,7 @@ struct login_ctx {
 	const char	*config;
 	const char	*duouser;
 	const char	*host;
+	bool    	automatic;
         uid_t		 uid;
 };
 
@@ -253,9 +255,10 @@ do_auth(struct login_ctx *ctx, const char *cmd)
 		    pw->pw_name, ip, NULL);
 		return (EXIT_FAILURE);
 	}
-	/* Special handling for non-interactive sessions */
+	/* Special handling for non-interactive sessions or automatic login */
 	if ((p = getenv("SSH_ORIGINAL_COMMAND")) != NULL ||
-	    !isatty(STDIN_FILENO)) {
+	    !isatty(STDIN_FILENO) ||
+            ctx->automatic == true) {
 		/* Try to support automatic one-shot login */
 		duo_set_conv_funcs(duo, NULL, NULL, NULL);
 		flags = (DUO_FLAG_SYNC|DUO_FLAG_AUTO);
@@ -373,7 +376,7 @@ get_command(int argc, char *argv[])
 static void
 usage(void)
 {
-	die("Usage: login_duo [-c config] [-d] [-f duouser] [-h host] [prog [args...]]");
+	die("Usage: login_duo [-c config] [-d] [-q] [-f duouser] [-h host] [prog [args...]]");
 }
 
 int
@@ -386,13 +389,16 @@ main(int argc, char *argv[])
 	
 	memset(ctx, 0, sizeof(ctx));
 	
-	while ((c = getopt(argc, argv, "c:df:h:?")) != -1) {
+	while ((c = getopt(argc, argv, "c:dqf:h:?")) != -1) {
 		switch (c) {
 		case 'c':
 			ctx->config = optarg;
 			break;
 		case 'd':
 			debug = 1;
+			break;
+		case 'q':
+			ctx->automatic = 1;
 			break;
 		case 'f':
 			ctx->duouser = optarg;
